@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Question Number Generator</title>
+    <style>
+        :root {
+            --bg-dark: #0f1923; 
+            --primary-red: #ff4655; 
+            --accent-cyan: #00f0ff; 
+            --pure-white: #ece8e1; 
+            --grey-dark: #1f2326;
+            --grey-border: #333b42;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--pure-white);
+            font-family: 'Oswald', sans-serif, "Microsoft JhengHei";
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* 背景掃描線 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 2px;
+            background: rgba(255, 70, 85, 0.1);
+            z-index: 100;
+            pointer-events: none;
+            animation: scan 4s linear infinite;
+        }
+        @keyframes scan { 0% { top: 0%; } 100% { top: 100%; } }
+
+        h1 {
+            font-size: 3.5rem;
+            letter-spacing: 10px;
+            margin-bottom: 30px;
+            border-left: 15px solid var(--primary-red);
+            padding-left: 20px;
+            text-transform: uppercase;
+        }
+
+        .config-panel {
+            background: var(--grey-dark);
+            width: 100%;
+            max-width: 1000px;
+            padding: 30px;
+            border: 1px solid var(--grey-border);
+            clip-path: polygon(0 0, 98% 0, 100% 5%, 100% 100%, 2% 100%, 0 95%);
+            margin-bottom: 50px;
+        }
+
+        .input-section { margin-bottom: 25px; }
+
+        label {
+            display: block;
+            color: var(--accent-cyan);
+            font-size: 1.4rem;
+            font-weight: bold;
+            margin-bottom: 12px;
+        }
+
+        input, textarea {
+            background: #000;
+            border: 2px solid var(--grey-border);
+            color: #fff;
+            padding: 15px;
+            font-size: 1.2rem;
+            width: 100%;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        input:focus, textarea:focus { border-color: var(--primary-red); }
+
+        .group-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .group-btn {
+            background: #2b3238;
+            border: none;
+            color: #888;
+            padding: 12px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+
+        .group-btn.active { background: var(--primary-red); color: white; }
+        .group-btn.excluded { background: #111; color: #444; text-decoration: line-through; }
+
+        .execute-btn {
+            background: var(--primary-red);
+            color: white;
+            border: none;
+            width: 100%;
+            padding: 20px;
+            font-size: 2rem;
+            font-weight: 900;
+            cursor: pointer;
+            letter-spacing: 5px;
+            transition: 0.3s;
+        }
+
+        .execute-btn:hover { background: white; color: var(--primary-red); box-shadow: 0 0 30px var(--primary-red); }
+
+        /* 結果區：大字排版 */
+        #result-container {
+            width: 100%;
+            max-width: 1100px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .result-row {
+            display: flex;
+            align-items: center;
+            background: var(--pure-white);
+            color: var(--bg-dark);
+            padding: 25px 40px;
+            border-left: 20px solid var(--primary-red);
+            animation: rowSlide 0.4s ease-out forwards;
+            opacity: 0;
+        }
+
+        @keyframes rowSlide {
+            from { transform: translateX(-30px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .res-group { 
+            font-size: 2rem; 
+            font-weight: 900; 
+            color: var(--bg-dark); 
+            text-transform: uppercase;
+            min-width: 180px;
+            border-right: 5px solid var(--primary-red);
+            margin-right: 30px;
+        }
+
+        .res-question { 
+            font-size: 2.8rem; 
+            font-weight: 800; 
+            flex-grow: 1;
+            line-height: 1.2;
+        }
+
+        @media (max-width: 800px) {
+            .result-row { flex-direction: column; text-align: center; }
+            .res-group { border-right: none; margin-right: 0; margin-bottom: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Question Number Generator</h1>
+
+    <div class="config-panel">
+        <div class="input-section">
+            <label>設定總組數</label>
+            <input type="number" id="groupTotal" value="6" min="1" oninput="updateGroupList()">
+        </div>
+
+        <div class="input-section">
+            <label>排除不參與組別 (點擊切換)</label>
+            <div id="groupList" class="group-selector"></div>
+        </div>
+
+        <div class="input-section">
+            <label>輸入問題池 (每行一個問題)</label>
+            <textarea id="questionInput" rows="5" placeholder="請在此輸入問題..."></textarea>
+        </div>
+
+        <button class="execute-btn" onclick="generateResults()">GENERATE</button>
+    </div>
+
+    <div id="result-container">
+        </div>
+
+    <script>
+        let excludedSet = new Set();
+
+        function updateGroupList() {
+            const total = document.getElementById('groupTotal').value;
+            const container = document.getElementById('groupList');
+            container.innerHTML = '';
+            excludedSet.clear();
+
+            for (let i = 1; i <= total; i++) {
+                const btn = document.createElement('button');
+                btn.className = 'group-btn active';
+                btn.innerText = `第 ${i} 組`;
+                btn.onclick = () => {
+                    if (excludedSet.has(i)) {
+                        excludedSet.delete(i);
+                        btn.classList.remove('excluded');
+                        btn.classList.add('active');
+                    } else {
+                        excludedSet.add(i);
+                        btn.classList.remove('active');
+                        btn.classList.add('excluded');
+                    }
+                };
+                container.appendChild(btn);
+            }
+        }
+
+        function generateResults() {
+            const total = document.getElementById('groupTotal').value;
+            const rawQuestions = document.getElementById('questionInput').value.split('\n').filter(q => q.trim() !== "");
+            const container = document.getElementById('result-container');
+            container.innerHTML = '';
+
+            // 1. 決定參與組別
+            let participants = [];
+            for (let i = 1; i <= total; i++) {
+                if (!excludedSet.has(i)) participants.push(i);
+            }
+
+            // 2. 隨機打亂題目
+            let shuffled = [...rawQuestions];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+
+            // 3. 渲染結果
+            participants.forEach((groupNum, index) => {
+                const row = document.createElement('div');
+                row.className = 'result-row';
+                row.style.animationDelay = `${index * 0.1}s`;
+
+                const qContent = shuffled[index] || "MISSION DATA MISSING";
+
+                row.innerHTML = `
+                    <div class="res-group">第 ${groupNum} 組</div>
+                    <div class="res-question">${qContent}</div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        updateGroupList();
+    </script>
+</body>
+</html>
